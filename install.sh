@@ -281,6 +281,15 @@ function dependency_install() {
     judge "安装 jq"
   fi
 
+  # 二维码在本机生成，不把包含 UUID 的连接链接发送给第三方服务。
+  # 这是可选的展示依赖，安装失败不应中断节点部署。
+  if ! command -v qrencode >/dev/null 2>&1; then
+    ${INS} qrencode
+    if ! command -v qrencode >/dev/null 2>&1; then
+      print_error "qrencode 安装失败，将仅显示连接链接；可稍后安装 qrencode"
+    fi
+  fi
+
   # 防止部分系统xray的默认bin目录缺失
   mkdir -p /usr/local/bin >/dev/null 2>&1
 }
@@ -971,8 +980,22 @@ function urlencode() {
 function print_link_and_qrcode() {
   print_ok "URL 链接 ($1)"
   print_ok "$2"
-  print_ok "URL 二维码 ($1) （请在浏览器中访问）"
-  print_ok "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=$(urlencode "$2")"
+
+  if ! command -v qrencode >/dev/null 2>&1; then
+    print_error "未安装 qrencode，无法显示本地二维码；上方连接链接仍可直接导入"
+    echo "Debian / Ubuntu：apt install -y qrencode"
+    echo "CentOS / Rocky / AlmaLinux / Oracle Linux：yum install -y qrencode"
+    echo "安装后重新选择菜单 23 即可显示二维码"
+    return 0
+  fi
+
+  print_ok "本地二维码 ($1)（请保持终端足够宽，避免图案换行）"
+  # 通过标准输入传递链接，避免 UUID 出现在 qrencode 的命令行参数中。
+  # UTF8 输出可直接在终端扫描，不依赖浏览器或外部 API。
+  if ! printf '%s' "$2" | qrencode -t UTF8 -m 2; then
+    print_error "本地二维码生成失败，请使用上方连接链接"
+  fi
+  return 0
 }
 
 function vless_xtls-rprx-vision_link() {
@@ -1045,22 +1068,6 @@ function basic_ws_information() {
   print_ok "————————————————————————"
   ws_information
   ws_link
-}
-
-# 赞助商与 AFF 展示，用于菜单头部与安装收尾。文案真源是 README_ZH.MD 的
-# 「❤️ 赞助商」与「支持这个项目」两节，改动时请一并同步 README.MD / README_FA.MD
-# 的对应章节（xray_docker 各 README 亦同）。
-# 刻意不放进 basic_information：菜单 23 查看配置链接时不应跟着展示推广。
-function show_support() {
-  echo -e "\n${Blue}──────────────────── 支持本项目 ────────────────────${Font}"
-  echo -e "${Yellow}赞助商${Font} CapybaraCode  AI 编码 / Claude Code API 中转"
-  echo -e "                     优惠码 WULABING 额外送 4 美元额度"
-  echo -e "                     https://api.capybaracode.cc/register?aff=ENZE8PZ2VBDE"
-  echo -e "${Yellow}赞助商${Font} UHDNOW        4K / IMAX 原盘 Emby 私服，多线路直连"
-  echo -e "                     https://www.uhdnow.com/signup?invite=IMAX4K"
-  echo -e "${Yellow}服务器 AFF${Font}           搬瓦工 · DMIT · Nube.sh · Vultr（详见 README）"
-  echo -e "${Yellow}USDT  TRC20${Font}          TU8mLTPfa5Y9nmszyfyt2VRAtuZhdLexL8"
-  echo -e "${Blue}────────────────────────────────────────────────────${Font}"
 }
 
 function show_access_log() {
@@ -1146,7 +1153,6 @@ function install_xray() {
   config_check
   restart_all
   basic_information
-  show_support
 }
 function install_xray_ws() {
   is_root
@@ -1166,7 +1172,6 @@ function install_xray_ws() {
   config_check
   restart_all
   basic_ws_information
-  show_support
 }
 menu() {
   update_sh
@@ -1174,7 +1179,6 @@ menu() {
   echo -e "\t Xray 安装管理脚本 ${Red}[${shell_version}]${Font}"
   echo -e "\t---authored by wulabing---"
   echo -e "\thttps://github.com/wulabing"
-  show_support
   echo
 
   echo -e "当前已安装版本：${shell_mode}"
